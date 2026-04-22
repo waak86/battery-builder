@@ -2,7 +2,7 @@ import { canvasState } from './state.js';
 import { initOC } from './oc.js';
 import { toggleBmsDiameter, initCustomSelects } from './ui.js';
 import { drawPreview } from './preview.js';
-import { updatePreview, generateLayout } from './app.js';
+import { updatePreview, generateLayout, redrawBusbarOverlay } from './app.js';
 import { busbarStore } from './busbars.js';
 import { initBusbarUI, renderBusbarList } from './busbar-ui.js';
 
@@ -49,6 +49,7 @@ function wireInputs() {
 function redrawFromState() {
     if (canvasState.currentPositions.length > 0) {
         drawPreview(canvasState.currentPositions, canvasState.currentCellSize);
+        redrawBusbarOverlay();
     }
 }
 
@@ -126,7 +127,7 @@ function wireCanvasInteractions() {
         canvasState.lastMouseY = e.clientY;
 
         if (canvasState.currentPositions.length > 0) {
-            requestAnimationFrame(() => drawPreview(canvasState.currentPositions, canvasState.currentCellSize));
+            requestAnimationFrame(() => { drawPreview(canvasState.currentPositions, canvasState.currentCellSize); redrawBusbarOverlay(); });
         }
     });
 
@@ -196,7 +197,7 @@ function wireCanvasInteractions() {
             lastTouchX = touch.clientX;
             lastTouchY = touch.clientY;
             if (canvasState.currentPositions.length > 0) {
-                requestAnimationFrame(() => drawPreview(canvasState.currentPositions, canvasState.currentCellSize));
+                requestAnimationFrame(() => { drawPreview(canvasState.currentPositions, canvasState.currentCellSize); redrawBusbarOverlay(); });
             }
         } else if (e.touches.length === 2) {
             const t1 = e.touches[0];
@@ -209,7 +210,7 @@ function wireCanvasInteractions() {
             canvasState.panY = touchCenterY - (touchCenterY - touchStartPanY) * zoomChange;
             canvasState.zoom = newZoom;
             if (canvasState.currentPositions.length > 0) {
-                requestAnimationFrame(() => drawPreview(canvasState.currentPositions, canvasState.currentCellSize));
+                requestAnimationFrame(() => { drawPreview(canvasState.currentPositions, canvasState.currentCellSize); redrawBusbarOverlay(); });
             }
         }
     });

@@ -17,8 +17,15 @@ import { build3DBusbar } from './busbar-model.js';
 import { renderBusbarList } from './busbar-ui.js';
 
 let lastComputedGeometries = [];
+let lastBusbarDrawArgs = null;
 export function getLastBusbarGeometries() {
     return lastComputedGeometries;
+}
+
+export function redrawBusbarOverlay() {
+    if (!lastBusbarDrawArgs) return;
+    const { positions, cellSize, padRadius, spacing } = lastBusbarDrawArgs;
+    drawBusbarsOverlay(busbarStore.list, lastComputedGeometries, positions, cellSize, padRadius, spacing, busbarStore.activeId);
 }
 
 export function updatePreview(resetView = false) {
@@ -176,6 +183,7 @@ export function updatePreview(resetView = false) {
         lastComputedGeometries = busbarStore.list.map(bb =>
             computeBusbarGeometry(bb.cellIndices, positions, cellRadius, busbarPadRadius, spacing, busbarKeepoutRadius)
         );
+        lastBusbarDrawArgs = { positions, cellSize, padRadius: busbarPadRadius, spacing };
         drawBusbarsOverlay(busbarStore.list, lastComputedGeometries, positions, cellSize, busbarPadRadius, spacing, busbarStore.activeId);
 
         const blockedByBusbarId = {};
