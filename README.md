@@ -2,6 +2,8 @@
 
 A browser tool for designing 3D printable cell holders and laser or plasma cut busbars for custom battery packs. Everything runs client side in the browser, no server, no install.
 
+Live at https://generate.waak.me/
+
 ## What you get
 
 - A parametric cell holder generated as a STEP solid, ready for CAD or 3D printing.
