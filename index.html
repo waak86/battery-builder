@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#0a0f1e">
+    <title>Cell Holder Generator - waak.me</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="loading-overlay active" id="loadingOverlay" style="display: flex !important;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">Initializing 3D Engine</div>
+            <div class="loading-subtext" id="loadingSubtext">Loading OpenCascade...</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>Cell Holder Generator</h1>
+        <p class="subtitle">Generate custom 3D printable cell holders with STEP export</p>
+
+        <div class="main-layout">
+            <div class="config-sidebar">
+                <div class="section">
+                    <h2>Configuration</h2>
+
+                    <h3>Pack Dimensions</h3>
+                    <div class="row">
+                        <div class="form-group">
+                            <label>Width (mm)</label>
+                            <input type="number" id="xDim" value="150">
+                        </div>
+                        <div class="form-group">
+                            <label>Length (mm)</label>
+                            <input type="number" id="yDim" value="100">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Height (mm)</label>
+                        <input type="number" id="height" value="10">
+                    </div>
+
+                    <h3>Cell Configuration</h3>
+                    <div class="form-group">
+                        <label>Cell Diameter (mm)</label>
+                        <input type="number" id="cellSize" value="21.35">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Layout Type</label>
+                        <select id="layoutType">
+                            <option value="grid">Grid Layout</option>
+                            <option value="honeycomb" selected>Honeycomb Layout</option>
+                            <option value="vertical">Vertical Honeycomb</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cell Spacing (mm)</label>
+                        <input type="number" id="spacing" value="0.6">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ledge Thickness (mm)</label>
+                        <input type="number" id="coverThickness" value="0.4">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ledge Width (mm)</label>
+                        <input type="number" id="ledgeWidth" value="2.75">
+                    </div>
+
+                    <h3>Features</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="roundedCorners" checked>
+                        <label for="roundedCorners">Rounded Corners</label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>BMS Holes</label>
+                        <select id="bmsHolesType">
+                            <option value="off">Off</option>
+                            <option value="halfcircles">Half Circles</option>
+                            <option value="fullcircles" selected>Full Circles</option>
+                            <option value="tabs">Edge Tabs</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="bmsHoleDiameterGroup">
+                        <label>BMS Hole Diameter (mm)</label>
+                        <input type="number" id="bmsHoleDiameter" value="4.0" min="1" max="10">
+                    </div>
+
+                    <div class="row" id="tabDimensionsGroup" style="display:none;">
+                        <div class="form-group">
+                            <label>Tab Width (mm)</label>
+                            <input type="number" id="tabWidth" value="4.0" min="0.5" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Tab Depth (mm)</label>
+                            <input type="number" id="tabDepth" value="1.0" min="0.1" step="0.1">
+                        </div>
+                    </div>
+
+                    <h3>Busbars</h3>
+                    <div id="busbarList"></div>
+                    <button class="btn-secondary" id="addBusbarBtn">+ Add Busbar</button>
+
+                    <button class="btn" id="generateBtn">Generate 3D Model</button>
+                </div>
+            </div>
+
+            <div class="preview-container">
+                <h2>Preview</h2>
+                <canvas id="preview"></canvas>
+                <div id="previewStats">Configure settings and click Generate to see preview</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="vendor/opencascade.wasm.js"></script>
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
