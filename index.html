@@ -22,94 +22,160 @@
 
         <div class="main-layout">
             <div class="config-sidebar">
-                <div class="section">
-                    <h2>Configuration</h2>
+                <nav class="sidebar-tabs" role="tablist" data-tabs>
+                    <button type="button" role="tab" class="tab active" data-panel="pack" aria-selected="true">
+                        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="6.5" width="15" height="11" rx="1.5"/>
+                            <line x1="18" y1="10" x2="21" y2="10"/>
+                            <line x1="18" y1="14" x2="21" y2="14"/>
+                        </svg>
+                        <span class="tab-label">Pack</span>
+                    </button>
+                    <button type="button" role="tab" class="tab" data-panel="cells" aria-selected="false">
+                        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="7.5" cy="12" r="3.2"/>
+                            <circle cx="15.5" cy="8" r="3.2"/>
+                            <circle cx="15.5" cy="16" r="3.2"/>
+                        </svg>
+                        <span class="tab-label">Cells</span>
+                    </button>
+                    <button type="button" role="tab" class="tab" data-panel="bms" aria-selected="false">
+                        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M13 3l-8 11h6l-1 7 8-11h-6l1-7z"/>
+                        </svg>
+                        <span class="tab-label">BMS</span>
+                    </button>
+                    <button type="button" role="tab" class="tab" data-panel="busbars" aria-selected="false">
+                        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="6" cy="12" r="2"/>
+                            <circle cx="18" cy="12" r="2"/>
+                            <line x1="8" y1="12" x2="16" y2="12"/>
+                            <line x1="6" y1="5" x2="18" y2="5"/>
+                            <line x1="6" y1="19" x2="18" y2="19"/>
+                        </svg>
+                        <span class="tab-label">Busbars</span>
+                    </button>
+                    <span class="tab-indicator" aria-hidden="true"></span>
+                </nav>
 
-                    <h3>Pack Dimensions</h3>
-                    <div class="row">
+                <div class="tab-panels">
+                    <section class="tab-panel active" role="tabpanel" data-panel="pack">
+                        <div class="seg-toggle" data-pack-mode data-mode="sp">
+                            <button type="button" class="seg active" data-mode="sp">Series &times; Parallel</button>
+                            <button type="button" class="seg" data-mode="mm">Size (mm)</button>
+                            <span class="seg-indicator" aria-hidden="true"></span>
+                        </div>
+
+                        <div class="pack-fields pack-sp-fields">
+                            <div class="form-group">
+                                <label>Series (S)</label>
+                                <input type="number" id="series" value="7" min="1" step="1">
+                                <span class="field-hint">Cells stacked in series. Sets voltage.</span>
+                            </div>
+                            <div class="form-group">
+                                <label>Parallel (P)</label>
+                                <input type="number" id="parallel" value="5" min="1" step="1">
+                                <span class="field-hint">Cells bundled in parallel. Sets capacity.</span>
+                            </div>
+                        </div>
+
+                        <div class="pack-fields pack-mm-fields" hidden>
+                            <div class="row">
+                                <div class="form-group">
+                                    <label>Width (mm)</label>
+                                    <input type="number" id="xDim" value="150">
+                                </div>
+                                <div class="form-group">
+                                    <label>Depth (mm)</label>
+                                    <input type="number" id="yDim" value="100">
+                                </div>
+                            </div>
+                            <span class="field-hint">Cells are fit automatically inside the footprint.</span>
+                        </div>
+
                         <div class="form-group">
-                            <label>Width (mm)</label>
-                            <input type="number" id="xDim" value="150">
+                            <label>Holder Thickness (mm)</label>
+                            <input type="number" id="height" value="10">
+                        </div>
+
+                        <div class="pack-summary" id="packSummary" aria-live="polite"></div>
+                    </section>
+
+                    <section class="tab-panel" role="tabpanel" data-panel="cells">
+                        <div class="form-group">
+                            <label>Cell Diameter (mm)</label>
+                            <input type="number" id="cellSize" value="21.35">
                         </div>
                         <div class="form-group">
-                            <label>Length (mm)</label>
-                            <input type="number" id="yDim" value="100">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Height (mm)</label>
-                        <input type="number" id="height" value="10">
-                    </div>
-
-                    <h3>Cell Configuration</h3>
-                    <div class="form-group">
-                        <label>Cell Diameter (mm)</label>
-                        <input type="number" id="cellSize" value="21.35">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Layout Type</label>
-                        <select id="layoutType">
-                            <option value="grid">Grid Layout</option>
-                            <option value="honeycomb" selected>Honeycomb Layout</option>
-                            <option value="vertical">Vertical Honeycomb</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Cell Spacing (mm)</label>
-                        <input type="number" id="spacing" value="0.6">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Ledge Thickness (mm)</label>
-                        <input type="number" id="coverThickness" value="0.4">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Ledge Width (mm)</label>
-                        <input type="number" id="ledgeWidth" value="2.75">
-                    </div>
-
-                    <h3>Features</h3>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="roundedCorners" checked>
-                        <label for="roundedCorners">Rounded Corners</label>
-                    </div>
-
-                    <div class="form-group">
-                        <label>BMS Holes</label>
-                        <select id="bmsHolesType">
-                            <option value="off">Off</option>
-                            <option value="halfcircles">Half Circles</option>
-                            <option value="fullcircles" selected>Full Circles</option>
-                            <option value="tabs">Edge Tabs</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="bmsHoleDiameterGroup">
-                        <label>BMS Hole Diameter (mm)</label>
-                        <input type="number" id="bmsHoleDiameter" value="4.0" min="1" max="10">
-                    </div>
-
-                    <div class="row" id="tabDimensionsGroup" style="display:none;">
-                        <div class="form-group">
-                            <label>Tab Width (mm)</label>
-                            <input type="number" id="tabWidth" value="4.0" min="0.5" step="0.1">
+                            <label>Layout Type</label>
+                            <select id="layoutType">
+                                <option value="grid">Grid Layout</option>
+                                <option value="honeycomb" selected>Honeycomb Layout</option>
+                                <option value="vertical">Vertical Honeycomb</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>Tab Depth (mm)</label>
-                            <input type="number" id="tabDepth" value="1.0" min="0.1" step="0.1">
+                            <label>Cell Spacing (mm)</label>
+                            <input type="number" id="spacing" value="0.6">
                         </div>
-                    </div>
+                        <div class="panel-divider" aria-hidden="true"></div>
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Ledge Thickness (mm)</label>
+                                <input type="number" id="coverThickness" value="0.4">
+                            </div>
+                            <div class="form-group">
+                                <label>Ledge Width (mm)</label>
+                                <input type="number" id="ledgeWidth" value="2.75">
+                            </div>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="roundedCorners" checked>
+                            <label for="roundedCorners">Rounded Corners</label>
+                        </div>
+                    </section>
 
-                    <h3>Busbars</h3>
-                    <div id="busbarList"></div>
-                    <button class="btn-secondary" id="addBusbarBtn">+ Add Busbar</button>
+                    <section class="tab-panel" role="tabpanel" data-panel="bms">
+                        <div class="form-group">
+                            <label>Opening Type</label>
+                            <select id="bmsHolesType">
+                                <option value="off">Off</option>
+                                <option value="halfcircles">Half Circles</option>
+                                <option value="fullcircles" selected>Full Circles</option>
+                                <option value="tabs">Edge Tabs</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="bmsHoleDiameterGroup">
+                            <label>Hole Diameter (mm)</label>
+                            <input type="number" id="bmsHoleDiameter" value="4.0" min="1" max="10">
+                        </div>
+                        <div class="row" id="tabDimensionsGroup" style="display:none;">
+                            <div class="form-group">
+                                <label>Tab Width (mm)</label>
+                                <input type="number" id="tabWidth" value="4.0" min="0.5" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label>Tab Depth (mm)</label>
+                                <input type="number" id="tabDepth" value="1.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                    </section>
 
-                    <button class="btn" id="generateBtn">Generate 3D Model</button>
+                    <section class="tab-panel" role="tabpanel" data-panel="busbars">
+                        <div class="form-group">
+                            <label>Export Format</label>
+                            <select id="busbarFormat">
+                                <option value="step" selected>STEP (3D stencil)</option>
+                                <option value="dxf">DXF (laser cutting)</option>
+                            </select>
+                            <span class="field-hint">STEP exports a 3D solid for CAD or 3D printing. DXF exports a flat 2D outline for laser or plasma cutters.</span>
+                        </div>
+                        <div id="busbarList"></div>
+                        <button class="btn-secondary" id="addBusbarBtn">+ Add Busbar</button>
+                    </section>
                 </div>
+
+                <button class="btn" id="generateBtn">Generate 3D Model</button>
             </div>
 
             <div class="preview-container">

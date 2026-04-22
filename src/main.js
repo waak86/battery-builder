@@ -21,20 +21,111 @@ function scaleCanvasForDPI() {
     canvas.style.height = rect.height + 'px';
 }
 
+function getPackMode() {
+    const el = document.querySelector('[data-pack-mode]');
+    return (el && el.dataset.mode) || 'sp';
+}
+
+// Compute the pack footprint (world mm) from Series and Parallel counts and write
+// it to the xDim / yDim inputs so the existing layout generators pick it up. When
+// the user switches to "Size (mm)" mode, xDim / yDim are entered directly and this
+// routine just refreshes the summary.
+function syncPackDimsFromSP() {
+    const mode = getPackMode();
+    const xEl = document.getElementById('xDim');
+    const yEl = document.getElementById('yDim');
+    const summary = document.getElementById('packSummary');
+
+    if (mode === 'mm') {
+        const xDim = parseFloat(xEl.value) || 0;
+        const yDim = parseFloat(yEl.value) || 0;
+        if (summary) {
+            summary.innerHTML =
+                `<strong>${xDim.toFixed(0)} &times; ${yDim.toFixed(0)} mm</strong> ` +
+                `<span class="muted">footprint. Cells fit automatically.</span>`;
+        }
+        return;
+    }
+
+    const s = Math.max(1, Math.round(parseFloat(document.getElementById('series').value) || 1));
+    const p = Math.max(1, Math.round(parseFloat(document.getElementById('parallel').value) || 1));
+    const cellSize = parseFloat(document.getElementById('cellSize').value) || 21.35;
+    const spacing = parseFloat(document.getElementById('spacing').value) || 0.6;
+    const layoutType = document.getElementById('layoutType').value;
+
+    const gridStride = cellSize + spacing;
+    const hexStride = Math.sqrt(3) / 2 * gridStride;
+    const EPS = 0.02;
+
+    const gridSpan = (n) => cellSize + 2 * spacing + (n - 1) * gridStride + EPS;
+    const hexSpan  = (n) => cellSize + 2 * spacing + (n - 1) * hexStride  + EPS;
+    // Offset packing: size for the shifted row so both rows fit n cells.
+    const offsetSpan = (n) => cellSize + 2 * spacing + (n - 1) * gridStride + gridStride / 2 + EPS;
+
+    let xDim, yDim;
+    if (layoutType === 'vertical') {
+        xDim = hexSpan(s);
+        yDim = offsetSpan(p);
+    } else if (layoutType === 'honeycomb') {
+        xDim = offsetSpan(s);
+        yDim = hexSpan(p);
+    } else {
+        xDim = gridSpan(s);
+        yDim = gridSpan(p);
+    }
+
+    xEl.value = xDim.toFixed(2);
+    yEl.value = yDim.toFixed(2);
+
+    if (summary) {
+        const total = s * p;
+        summary.innerHTML =
+            `<strong>${s}S ${p}P</strong>. ${total} cells. ` +
+            `<span class="muted">Footprint about ${xDim.toFixed(0)} &times; ${yDim.toFixed(0)} mm.</span>`;
+    }
+}
+
 function wireInputs() {
-    const layoutInputs = ['xDim', 'yDim', 'spacing', 'cellSize', 'layoutType'];
+    // Series/Parallel drive xDim/yDim in SP mode. When the user types into them (or
+    // into spacing/cellSize/layoutType) we resync and re-render.
+    const spInputs = ['series', 'parallel'];
+    spInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => { syncPackDimsFromSP(); updatePreview(true); });
+        el.addEventListener('change', () => busbarStore.clearAll());
+    });
+
+    // In mm mode xDim / yDim are user inputs; refresh summary and preview directly.
+    const mmInputs = ['xDim', 'yDim'];
+    mmInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            if (getPackMode() === 'mm') {
+                syncPackDimsFromSP();
+                updatePreview(true);
+            }
+        });
+        el.addEventListener('change', () => {
+            if (getPackMode() === 'mm') busbarStore.clearAll();
+        });
+    });
+
+    const layoutInputs = ['spacing', 'cellSize', 'layoutType'];
     layoutInputs.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', () => busbarStore.clearAll());
     });
 
-    const dimensionInputs = ['xDim', 'yDim', 'spacing', 'cellSize', 'layoutType', 'height', 'coverThickness'];
+    const dimensionInputs = ['spacing', 'cellSize', 'layoutType', 'height', 'coverThickness'];
     dimensionInputs.forEach(id => {
         const element = document.getElementById(id);
         if (!element) return;
-        element.addEventListener('input', () => updatePreview(true));
-        element.addEventListener('change', () => updatePreview(true));
+        const handler = () => { syncPackDimsFromSP(); updatePreview(true); };
+        element.addEventListener('input', handler);
+        element.addEventListener('change', handler);
     });
 
     const visualInputs = ['bmsHolesType', 'roundedCorners', 'bmsHoleDiameter', 'ledgeWidth', 'tabWidth', 'tabDepth'];
@@ -43,6 +134,41 @@ function wireInputs() {
         if (!element) return;
         element.addEventListener('input', () => updatePreview(false));
         element.addEventListener('change', () => updatePreview(false));
+    });
+}
+
+function wirePackMode() {
+    const toggle = document.querySelector('[data-pack-mode]');
+    if (!toggle) return;
+    const buttons = Array.from(toggle.querySelectorAll('.seg'));
+    const indicator = toggle.querySelector('.seg-indicator');
+    const spFields = document.querySelector('.pack-sp-fields');
+    const mmFields = document.querySelector('.pack-mm-fields');
+
+    const moveIndicator = (btn) => {
+        if (!indicator || !btn) return;
+        indicator.style.left = btn.offsetLeft + 'px';
+        indicator.style.width = btn.offsetWidth + 'px';
+    };
+
+    const apply = (mode) => {
+        toggle.dataset.mode = mode;
+        buttons.forEach(b => {
+            const on = b.dataset.mode === mode;
+            b.classList.toggle('active', on);
+            if (on) moveIndicator(b);
+        });
+        if (spFields) spFields.hidden = mode !== 'sp';
+        if (mmFields) mmFields.hidden = mode !== 'mm';
+        syncPackDimsFromSP();
+        updatePreview(true);
+        busbarStore.clearAll();
+    };
+
+    buttons.forEach(b => b.addEventListener('click', () => apply(b.dataset.mode)));
+    requestAnimationFrame(() => {
+        const active = buttons.find(b => b.classList.contains('active')) || buttons[0];
+        if (active) moveIndicator(active);
     });
 }
 
@@ -238,9 +364,52 @@ function wireCanvasInteractions() {
     canvas.style.cursor = 'grab';
 }
 
+function wireSidebarTabs() {
+    const root = document.querySelector('[data-tabs]');
+    if (!root) return;
+    const tabs = Array.from(root.querySelectorAll('.tab'));
+    const indicator = root.querySelector('.tab-indicator');
+    const panels = Array.from(document.querySelectorAll('.tab-panel'));
+
+    const moveIndicator = (tab) => {
+        if (!indicator || !tab) return;
+        indicator.style.left = tab.offsetLeft + 'px';
+        indicator.style.width = tab.offsetWidth + 'px';
+    };
+
+    const activate = (key) => {
+        for (const tab of tabs) {
+            const on = tab.dataset.panel === key;
+            tab.classList.toggle('active', on);
+            tab.setAttribute('aria-selected', on ? 'true' : 'false');
+            if (on) moveIndicator(tab);
+        }
+        for (const panel of panels) {
+            panel.classList.toggle('active', panel.dataset.panel === key);
+        }
+    };
+
+    for (const tab of tabs) {
+        tab.addEventListener('click', () => activate(tab.dataset.panel));
+    }
+
+    // Set initial indicator position after layout settles.
+    requestAnimationFrame(() => {
+        const active = tabs.find(t => t.classList.contains('active')) || tabs[0];
+        if (active) moveIndicator(active);
+    });
+    window.addEventListener('resize', () => {
+        const active = tabs.find(t => t.classList.contains('active'));
+        if (active) moveIndicator(active);
+    });
+}
+
 async function initializeApp() {
     scaleCanvasForDPI();
     initCustomSelects();
+    wireSidebarTabs();
+    wirePackMode();
+    syncPackDimsFromSP();
 
     const bmsTypeSelect = document.getElementById('bmsHolesType');
     if (bmsTypeSelect) {

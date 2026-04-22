@@ -10,6 +10,7 @@ import {
 import { drawPreview, clearCanvas } from './preview.js';
 import { create3DModel } from './model.js';
 import { downloadSTEP } from './step-export.js';
+import { buildBusbarDXF, downloadDXF } from './dxf-export.js';
 import { busbarStore } from './busbars.js';
 import { computeBusbarGeometry } from './busbar-geometry.js';
 import { drawBusbarsOverlay } from './busbar-preview.js';
@@ -453,7 +454,7 @@ export async function generateLayout() {
             const bb = busbarStore.list[i];
             const geom = busbarGeometries[i];
             if (geom.blocked) {
-                showStatus(`${bb.name}: ${geom.blocked.reason} — cannot export`, 'error');
+                showStatus(`${bb.name}: ${geom.blocked.reason}. Cannot export.`, 'error');
                 showLoading(false);
                 return;
             }
@@ -463,35 +464,79 @@ export async function generateLayout() {
         const holderCenterY = (Math.min(...positions.map(p => p[1])) + Math.max(...positions.map(p => p[1]))) / 2;
         const centeredPositions = positions.map(([x, y]) => [x - holderCenterX, y - holderCenterY]);
 
-        const busbarShapes = [];
+        // Sanitize a busbar name for use in a filename (ASCII letters/digits/underscores only).
+        const safeName = (name) => (name || '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'busbar';
+
+        // Signature invariant under rigid motion AND reflection. Two busbars with equal
+        // signatures are congruent, so we only need to print one copy. Uses sorted
+        // pairwise cell distances; pairwise distance sets are the same under
+        // translation, rotation, and mirror.
+        const busbarSignature = (bb) => {
+            const idxs = bb.cellIndices;
+            if (idxs.length === 0) return null;
+            if (idxs.length === 1) return `single|${bb.thickness.toFixed(2)}`;
+            const pts = idxs.map(i => centeredPositions[i]).filter(Boolean);
+            const dists = [];
+            for (let a = 0; a < pts.length; a++) {
+                for (let b = a + 1; b < pts.length; b++) {
+                    dists.push(Math.hypot(pts[a][0] - pts[b][0], pts[a][1] - pts[b][1]));
+                }
+            }
+            dists.sort((x, y) => x - y);
+            return `${pts.length}|${bb.thickness.toFixed(2)}|${dists.map(d => d.toFixed(3)).join(',')}`;
+        };
+
+        // Export format for busbars: STEP solid or DXF flat pattern. The cellholder
+        // is always exported as STEP.
+        const busbarFormat = (document.getElementById('busbarFormat')?.value) || 'step';
+
+        // Deduplicate busbars by signature. For STEP we also need to build the 3D
+        // shape; for DXF we only need the geometry so we can skip the expensive build.
+        const uniqueBusbars = [];
+        const sigSeen = new Map();
         for (let i = 0; i < busbarStore.list.length; i++) {
             const bb = busbarStore.list[i];
             if (bb.cellIndices.length === 0) continue;
-            const shape = build3DBusbar(busbarGeometries[i], centeredPositions, busbarPadRadius, height, bb.thickness);
-            if (shape) busbarShapes.push(shape);
+            const sig = busbarSignature(bb);
+            if (sig && sigSeen.has(sig)) {
+                sigSeen.get(sig).copies.push(bb.name);
+                continue;
+            }
+            const entry = { bb, geom: busbarGeometries[i], copies: [bb.name], shape: null };
+            if (busbarFormat === 'step') {
+                entry.shape = build3DBusbar(busbarGeometries[i], centeredPositions, busbarPadRadius, height, bb.thickness);
+                if (!entry.shape) continue;
+            }
+            uniqueBusbars.push(entry);
+            if (sig) sigSeen.set(sig, entry);
         }
 
-        const oc = ocRef.instance;
-        let exportShape = holderShape;
-        if (busbarShapes.length > 0) {
-            const compound = new oc.TopoDS_Compound();
-            const builder = new oc.BRep_Builder();
-            builder.MakeCompound(compound);
-            builder.Add(compound, holderShape);
-            for (const s of busbarShapes) builder.Add(compound, s);
-            exportShape = compound;
+        // Trigger downloads sequentially with small delays so browsers allow them.
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        downloadSTEP(holderShape, `cellholder_${layoutType}.step`);
+        for (let i = 0; i < uniqueBusbars.length; i++) {
+            await wait(250);
+            const { bb, geom, shape } = uniqueBusbars[i];
+            const base = `busbar_${safeName(bb.name)}`;
+            if (busbarFormat === 'dxf') {
+                const content = buildBusbarDXF(geom, centeredPositions, busbarPadRadius);
+                downloadDXF(content, `${base}.dxf`);
+            } else {
+                downloadSTEP(shape, `${base}.step`);
+            }
         }
 
-        const filename = `${layoutType}_layout.step`;
-        downloadSTEP(exportShape, filename);
-
+        const totalBusbars = busbarStore.list.filter(b => b.cellIndices.length > 0).length;
+        const skipped = totalBusbars - uniqueBusbars.length;
+        const busbarMsg = uniqueBusbars.length > 0
+            ? `. ${uniqueBusbars.length} unique ${busbarFormat.toUpperCase()} busbar file${uniqueBusbars.length === 1 ? '' : 's'}${skipped > 0 ? ` (${skipped} mirrored duplicate${skipped === 1 ? '' : 's'} skipped)` : ''}`
+            : '';
         const holeType = useTabs ? 'edge tabs' :
             (circleHoleOffset ? 'circle offset' : 'semicircle offset');
         const filletMsg = (filletBms && !useTabs) ? ' with filleted holes' : '';
-        const busbarMsg = busbarShapes.length > 0 ? ` + ${busbarShapes.length} busbar${busbarShapes.length === 1 ? '' : 's'}` : '';
 
         showStatus(
-            `${layoutName} generated with ${positions.length} cells (${holeType}${filletMsg})${busbarMsg}`,
+            `${layoutName} generated. ${positions.length} cells (${holeType}${filletMsg})${busbarMsg}.`,
             'success'
         );
     } catch (error) {
