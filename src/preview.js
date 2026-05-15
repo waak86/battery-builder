@@ -1,13 +1,47 @@
 import { canvasState } from './state.js';
 import { showStatus } from './ui.js';
 
-export function clearCanvas() {
-    const canvas = document.getElementById('preview');
+export function clearCanvas(canvasId = 'preview') {
+    const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+}
+
+// Copy the rendered top canvas to another canvas (for the bottom face view).
+// Both canvases must have been DPI-scaled to the same pixel dimensions.
+export function drawPreviewCopy(dstCanvasId) {
+    const src = document.getElementById('preview');
+    const dst = document.getElementById(dstCanvasId);
+    if (!src || !dst) return;
+    const ctx = dst.getContext('2d');
+    // Use identity transform so we copy physical pixels 1:1, bypassing any
+    // DPR base scale that is baked into the context.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, dst.width, dst.height);
+    ctx.drawImage(src, 0, 0, dst.width, dst.height);
+    ctx.restore();
+}
+
+// Copy the rendered top canvas to another canvas (for the bottom face view).
+export function drawPreviewMirroredCopy(dstCanvasId) {
+    const src = document.getElementById('preview');
+    const dst = document.getElementById(dstCanvasId);
+    if (!src || !dst) return;
+    const ctx = dst.getContext('2d');
+    // Use identity transform so we copy physical pixels 1:1, bypassing any
+    // DPR base scale that is baked into the context.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, dst.width, dst.height);
+    ctx.drawImage(src, 0, 0, dst.width, dst.height);
+    ctx.restore();
 }
 
 export function drawPreview(positions, cellSize) {
@@ -21,9 +55,13 @@ export function drawPreview(positions, cellSize) {
     }
     const ctx = canvas.getContext('2d');
 
+    // Clear at identity so physical pixel dimensions are used directly.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
 
     if (positions.length === 0) return;
 
@@ -37,6 +75,7 @@ export function drawPreview(positions, cellSize) {
     const useTabs = bmsHolesType === 'tabs';
     const useFullCircles = bmsHolesType === 'fullcircles';
     const circleHoleOffset = false;
+    const layoutType = document.getElementById('layoutType').value;
     const roundedCorners = document.getElementById('roundedCorners').checked;
     const bmsHoleDiameter = parseFloat(document.getElementById('bmsHoleDiameter').value) || 4.0;
     const ledgeWidth = parseFloat(document.getElementById('ledgeWidth').value) || 0;
@@ -200,11 +239,18 @@ export function drawPreview(positions, cellSize) {
         const holeTopRowKey = useFullCircles ? visualTopRowKey : topYKey;
         const holeBottomRowKey = useFullCircles ? visualBottomRowKey : bottomYKey;
 
-        for (let i = 0; i < rows[holeTopRowKey].length - 1; i++) {
-            const x = (rows[holeTopRowKey][i][0] + rows[holeTopRowKey][i + 1][0]) / 2;
-            const cellY = rows[holeTopRowKey][i][1];
-            const x1 = rows[holeTopRowKey][i][0];
-            const x2 = rows[holeTopRowKey][i + 1][0];
+        // Vertical column pitch: minimum X delta between any two cells
+        const _allXSorted = [...new Set(positions.map(([x]) => Math.round(x * 1000)))]
+            .sort((a, b) => a - b).map(v => v / 1000);
+        const vertColPitch = _allXSorted.length >= 2 ? _allXSorted[1] - _allXSorted[0] : 0;
+
+        const topTabRow = rows[holeTopRowKey];
+        const topTabPitch = topTabRow.length >= 2 ? topTabRow[topTabRow.length - 1][0] - topTabRow[topTabRow.length - 2][0] : 0;
+        for (let i = 0; i < topTabRow.length - 1; i++) {
+            const x = (topTabRow[i][0] + topTabRow[i + 1][0]) / 2;
+            const cellY = topTabRow[i][1];
+            const x1 = topTabRow[i][0];
+            const x2 = topTabRow[i + 1][0];
             const wallY = packMinY;
             const y = topEdge;
             const flip = cellY < wallY ? -1 : 1;
@@ -223,12 +269,42 @@ export function drawPreview(positions, cellSize) {
             const debugTri = useFullCircles ? { apex: { x, y: wallY }, left, right } : null;
             bmsHolePositions.push({ x, y, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri });
         }
+        if (layoutType === 'vertical') {
+            if (!useFullCircles) {
+                const topIsEven = vertColPitch === 0 || (topTabRow[0][0] - minX) < vertColPitch / 2;
+                if (!topIsEven) {
+                    const topExtY = topEdge;
+                    // Left corner: continue interior hole pattern (tabPitch/2 = one colPitch to the left)
+                    bmsHolePositions.push({ x: topTabRow[0][0] - topTabPitch / 2, y: topExtY, diameter: bmsHoleDiameter, isTab: false, isFull: false, debugTri: null });
+                    // Right corner only if an even-col neighbor exists to the right
+                    const topRightNeighX = topTabRow[topTabRow.length - 1][0] + vertColPitch;
+                    if (_allXSorted.some(x => Math.abs(x - topRightNeighX) < 0.5)) {
+                        bmsHolePositions.push({ x: topTabRow[topTabRow.length - 1][0] + topTabPitch / 2, y: topExtY, diameter: bmsHoleDiameter, isTab: false, isFull: false, debugTri: null });
+                    }
+                }
+            } else {
+                // Full circles: top-right corner when an odd col exists beyond the last even col (even S)
+                const topRightNeighX = topTabRow[topTabRow.length - 1][0] + vertColPitch;
+                if (_allXSorted.some(x => Math.abs(x - topRightNeighX) < 0.5)) {
+                    // Continue the interior hole pattern: offset by topTabPitch/2 (= one colPitch)
+                    bmsHolePositions.push({ x: topTabRow[topTabRow.length - 1][0] + topTabPitch / 2, y: topEdge, diameter: bmsHoleDiameter, isTab: false, isFull: true, debugTri: null });
+                }
+            }
+        } else if (layoutType !== 'grid') {
+            const topTabExtraRight = topTabRow.length < 2 || (topTabRow[0][0] - minX) < topTabPitch / 4;
+            bmsHolePositions.push(topTabExtraRight
+                ? { x: topTabRow[topTabRow.length - 1][0] + topTabPitch / 2, y: topEdge, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null }
+                : { x: topTabRow[0][0] - topTabPitch / 2, y: topEdge, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null });
+        }
 
-        for (let i = 0; i < rows[holeBottomRowKey].length - 1; i++) {
-            const x = (rows[holeBottomRowKey][i][0] + rows[holeBottomRowKey][i + 1][0]) / 2;
-            const cellY = rows[holeBottomRowKey][i][1];
-            const x1 = rows[holeBottomRowKey][i][0];
-            const x2 = rows[holeBottomRowKey][i + 1][0];
+        const botTabRow = rows[holeBottomRowKey];
+        const botTabPitch = botTabRow.length >= 2 ? botTabRow[botTabRow.length - 1][0] - botTabRow[botTabRow.length - 2][0] : 0;
+        for (let i = 0; i < botTabRow.length - 1; i++) {
+            const x = (botTabRow[i][0] + botTabRow[i + 1][0]) / 2;
+            const cellY = botTabRow[i][1];
+            const x1 = botTabRow[i][0];
+            const x2 = botTabRow[i + 1][0];
+
             const wallY = packMaxY;
             const y = bottomEdge;
             const flip = cellY < wallY ? -1 : 1;
@@ -246,6 +322,31 @@ export function drawPreview(positions, cellSize) {
             const right = { x: x2 - r * Math.cos(alphaBot), y: cellY + r * Math.sin(alphaBot) };
             const debugTri = useFullCircles ? { apex: { x, y: wallY }, left, right } : null;
             bmsHolePositions.push({ x, y, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri });
+        }
+        if (layoutType === 'vertical') {
+            const botIsEven = vertColPitch === 0 || (botTabRow[0][0] - minX) < vertColPitch / 2;
+            if (!botIsEven) {
+                // Use bottomEdge for all types so corner aligns with interior bottom holes
+                const botExtY = bottomEdge;
+                // Left corner: continue interior hole pattern (botTabPitch/2 = one colPitch to the left)
+                bmsHolePositions.push({ x: botTabRow[0][0] - botTabPitch / 2, y: botExtY, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null });
+                // Right corner only if an even-col neighbor exists to the right (odd S = yes, even S = no)
+                const botRightNeighX = botTabRow[botTabRow.length - 1][0] + vertColPitch;
+                if (_allXSorted.some(x => Math.abs(x - botRightNeighX) < 0.5)) {
+                    bmsHolePositions.push({ x: botTabRow[botTabRow.length - 1][0] + botTabPitch / 2, y: botExtY, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null });
+                }
+            } else if (vertColPitch > 0 && botTabRow.length >= 2) {
+                // Even-col row (visual top for non-FC): add right corner when an odd col extends beyond the last even col
+                const botRightNeighX = botTabRow[botTabRow.length - 1][0] + vertColPitch;
+                if (_allXSorted.some(x => Math.abs(x - botRightNeighX) < 0.5)) {
+                    bmsHolePositions.push({ x: botTabRow[botTabRow.length - 1][0] + botTabPitch / 2, y: bottomEdge, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null });
+                }
+            }
+        } else if (layoutType !== 'grid') {
+            const botTabExtraRight = botTabRow.length < 2 || (botTabRow[0][0] - minX) < botTabPitch / 4;
+            bmsHolePositions.push(botTabExtraRight
+                ? { x: botTabRow[botTabRow.length - 1][0] + botTabPitch / 2, y: bottomEdge, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null }
+                : { x: botTabRow[0][0] - botTabPitch / 2, y: bottomEdge, diameter: bmsHoleDiameter, isTab: false, isFull: useFullCircles, debugTri: null });
         }
     }
 
@@ -283,20 +384,19 @@ export function drawPreview(positions, cellSize) {
             ctx.strokeStyle = 'rgba(255, 193, 7, 0.9)';
             ctx.lineWidth = 1.5 / zoom;
 
-            const tabWidthMm = parseFloat(document.getElementById('tabWidth').value) || 4.0;
-            const tabDepthMm = parseFloat(document.getElementById('tabDepth').value) || 1.0;
+            const tabWidthMm = parseFloat(document.getElementById('tabWidth')?.value) || 4.0;
             const tabWidth = tabWidthMm * scale;
-            const tabHeight = tabDepthMm * scale;
+            const tabHeight = 1.0 * scale;
 
             for (const hole of bmsHolePositions) {
                 const cx = (hole.x - minX + r + spacing) * scale + offsetX;
 
-                if (hole.y > maxY) {
-                    ctx.fillRect(cx - tabWidth / 2, offsetY + packHeight * scale - tabHeight, tabWidth, tabHeight);
-                    ctx.strokeRect(cx - tabWidth / 2, offsetY + packHeight * scale - tabHeight, tabWidth, tabHeight);
-                } else {
+                if (hole.y < minY) {
                     ctx.fillRect(cx - tabWidth / 2, offsetY, tabWidth, tabHeight);
                     ctx.strokeRect(cx - tabWidth / 2, offsetY, tabWidth, tabHeight);
+                } else {
+                    ctx.fillRect(cx - tabWidth / 2, offsetY + packHeight * scale - tabHeight, tabWidth, tabHeight);
+                    ctx.strokeRect(cx - tabWidth / 2, offsetY + packHeight * scale - tabHeight, tabWidth, tabHeight);
                 }
             }
         } else if (useFullCircles) {

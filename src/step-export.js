@@ -1,6 +1,24 @@
 import { ocRef } from './oc.js';
 import { showStatus } from './ui.js';
 
+// Returns the raw STEP bytes (Uint8Array) for the given shape without triggering
+// a browser download. Used by the ZIP export path.
+export function buildSTEPBytes(shape, filename) {
+    const oc = ocRef.instance;
+    if (!oc || !shape) return null;
+    try {
+        const writer = new oc.STEPControl_Writer();
+        writer.Transfer(shape, 0);
+        writer.Write(filename);
+        const fileData = oc.FS.readFile(filename);
+        oc.FS.unlink(filename);
+        return fileData;
+    } catch (error) {
+        console.error('STEP bytes error:', error);
+        return null;
+    }
+}
+
 export function downloadSTEP(shape, filename) {
     const oc = ocRef.instance;
     if (!oc || !shape) return;

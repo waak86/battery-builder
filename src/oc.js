@@ -9,8 +9,12 @@ export async function initOC() {
     if (ocRef.initialized) return;
 
     try {
+        const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL)
+            ? import.meta.env.BASE_URL
+            : '/';
+        const wasmPath = `${base.replace(/\/?$/, '/')}vendor/opencascade.wasm.wasm`;
         ocRef.instance = await opencascade({
-            locateFile: () => 'vendor/opencascade.wasm.wasm'
+            locateFile: () => wasmPath
         });
         ocRef.initialized = true;
         console.log('OpenCascade initialized successfully');

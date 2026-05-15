@@ -17,6 +17,8 @@ export function create3DModel(positions, config) {
         useTabs,
         useFullCircles,
         filletBms,
+        tabOverlapSide,
+        layoutType = 'honeycomb',
     } = config;
 
     const r = cellSize / 2;
@@ -212,16 +214,51 @@ export function create3DModel(positions, config) {
         const topRow = rows[topYKey].sort((a, b) => a[0] - b[0]);
         const bottomRow = rows[bottomYKey].sort((a, b) => a[0] - b[0]);
 
+        const minAllX = Math.min(...positions.map(([x]) => x));
+
+        // Vertical column pitch: minimum X delta between any two cells
+        const _allXSorted = [...new Set(positions.map(([x]) => Math.round(x * 1000)))]
+            .sort((a, b) => a - b).map(v => v / 1000);
+        const vertColPitch = _allXSorted.length >= 2 ? _allXSorted[1] - _allXSorted[0] : 0;
+
+        const topPitch = topRow.length >= 2 ? topRow[topRow.length - 1][0] - topRow[topRow.length - 2][0] : 0;
         const topHoles = [];
         for (let i = 0; i < topRow.length - 1; i++) {
-            const xMid = (topRow[i][0] + topRow[i + 1][0]) / 2;
-            topHoles.push([xMid, holeYTop]);
+            topHoles.push([(topRow[i][0] + topRow[i + 1][0]) / 2, holeYTop]);
+        }
+        if (layoutType === 'vertical') {
+            const topIsEven = vertColPitch === 0 || (topRow[0][0] - minAllX) < vertColPitch / 2;
+            if (!topIsEven) {
+                topHoles.unshift([topRow[0][0] - vertColPitch / 2, holeYTop]);
+                topHoles.push([topRow[topRow.length - 1][0] + vertColPitch / 2, holeYTop]);
+            }
+        } else if (layoutType !== 'grid') {
+            const topExtraRight = topRow.length >= 2 && (topRow[0][0] - minAllX) < topPitch / 4;
+            if (topExtraRight) {
+                topHoles.push([topRow[topRow.length - 1][0] + topPitch / 2, holeYTop]);
+            } else {
+                topHoles.unshift([topRow[0][0] - topPitch / 2, holeYTop]);
+            }
         }
 
+        const bottomPitch = bottomRow.length >= 2 ? bottomRow[bottomRow.length - 1][0] - bottomRow[bottomRow.length - 2][0] : 0;
         const bottomHoles = [];
         for (let i = 0; i < bottomRow.length - 1; i++) {
-            const xMid = (bottomRow[i][0] + bottomRow[i + 1][0]) / 2;
-            bottomHoles.push([xMid, holeYBottom]);
+            bottomHoles.push([(bottomRow[i][0] + bottomRow[i + 1][0]) / 2, holeYBottom]);
+        }
+        if (layoutType === 'vertical') {
+            const bottomIsEven = vertColPitch === 0 || (bottomRow[0][0] - minAllX) < vertColPitch / 2;
+            if (!bottomIsEven) {
+                bottomHoles.unshift([bottomRow[0][0] - vertColPitch / 2, holeYBottom]);
+                bottomHoles.push([bottomRow[bottomRow.length - 1][0] + vertColPitch / 2, holeYBottom]);
+            }
+        } else if (layoutType !== 'grid') {
+            const bottomExtraRight = bottomRow.length >= 2 && (bottomRow[0][0] - minAllX) < bottomPitch / 4;
+            if (bottomExtraRight) {
+                bottomHoles.push([bottomRow[bottomRow.length - 1][0] + bottomPitch / 2, holeYBottom]);
+            } else {
+                bottomHoles.unshift([bottomRow[0][0] - bottomPitch / 2, holeYBottom]);
+            }
         }
 
         const allBmsHoles = [...topHoles, ...bottomHoles];
@@ -229,25 +266,28 @@ export function create3DModel(positions, config) {
         if (useTabs) {
             const slotWidth = config.tabWidth || holeDiameter;
             const slotInset = config.tabDepth || 1.0;
+            const slotHeight = Number.isFinite(config.tabLength) && config.tabLength > 0
+                ? Math.min(config.tabLength, height)
+                : height;
             const topEdgeY = length / 2;
             const bottomEdgeY = -length / 2;
 
             const allSlots = [];
 
             topHoles.forEach(([xPos]) => {
-                const slotBox = new oc.BRepPrimAPI_MakeBox(slotWidth, slotInset, height);
+                const slotBox = new oc.BRepPrimAPI_MakeBox(slotWidth, slotInset, slotHeight);
                 const slot = slotBox.Shape();
                 const trans = new oc.gp_Trsf();
-                trans.SetTranslation(new oc.gp_Vec(xPos - slotWidth / 2, topEdgeY - slotInset, 0));
+                trans.SetTranslation(new oc.gp_Vec(xPos - slotWidth / 2, topEdgeY - slotInset, height - slotHeight));
                 const slotTransform = new oc.BRepBuilderAPI_Transform(slot, trans, false);
                 allSlots.push(slotTransform.Shape());
             });
 
             bottomHoles.forEach(([xPos]) => {
-                const slotBox = new oc.BRepPrimAPI_MakeBox(slotWidth, slotInset, height);
+                const slotBox = new oc.BRepPrimAPI_MakeBox(slotWidth, slotInset, slotHeight);
                 const slot = slotBox.Shape();
                 const trans = new oc.gp_Trsf();
-                trans.SetTranslation(new oc.gp_Vec(xPos - slotWidth / 2, bottomEdgeY, 0));
+                trans.SetTranslation(new oc.gp_Vec(xPos - slotWidth / 2, bottomEdgeY, height - slotHeight));
                 const slotTransform = new oc.BRepBuilderAPI_Transform(slot, trans, false);
                 allSlots.push(slotTransform.Shape());
             });
