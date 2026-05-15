@@ -33,9 +33,11 @@ export function toggleBmsDiameter() {
     const bmsType = document.getElementById('bmsHolesType').value;
     const diameterGroup = document.getElementById('bmsHoleDiameterGroup');
     const tabDimsGroup = document.getElementById('tabDimensionsGroup');
+    const tabOverlapSideGroup = document.getElementById('tabOverlapSideGroup');
     diameterGroup.style.display =
         (bmsType === 'halfcircles' || bmsType === 'fullcircles') ? 'block' : 'none';
     tabDimsGroup.style.display = (bmsType === 'tabs') ? 'grid' : 'none';
+    if (tabOverlapSideGroup) tabOverlapSideGroup.style.display = (bmsType === 'tabs') ? 'block' : 'none';
 }
 
 export function initCustomSelects() {

@@ -148,21 +148,30 @@ function angleCovered(theta, dirs) {
 export function buildBusbarDXF(geometry, positions, padRadius) {
     const layer = 'busbar';
     const tokens = [...dxfHeader(), ...dxfTables(), '0', 'SECTION', '2', 'ENTITIES'];
+    const extraPads = Array.isArray(geometry.extraPads) ? geometry.extraPads : [];
+    const extraSegments = Array.isArray(geometry.extraSegments) ? geometry.extraSegments : [];
+    const cutouts = Array.isArray(geometry.cutouts) ? geometry.cutouts : [];
 
     // Enumerate pads (cells + waypoints) and capsule segments with shared keys so we
     // can tell which shapes are "self" vs "other" when clipping.
     const pads = new Map();
-    const caps = []; // { a, b, padKeyA, padKeyB }
+    const caps = []; // { a, b, padKeyA, padKeyB, radius }
 
-    const ensurePad = (key, pos) => {
-        if (!pads.has(key)) pads.set(key, { pos, dirs: [] });
+    const ensurePad = (key, pos, radius = padRadius) => {
+        if (!pads.has(key)) pads.set(key, { pos, dirs: [], radius });
+        else pads.get(key).radius = Math.max(pads.get(key).radius, radius);
         return pads.get(key);
     };
 
     for (const idx of geometry.padIndices) {
         const p = positions[idx];
         if (!p) continue;
-        ensurePad(`c${idx}`, p);
+        ensurePad(`c${idx}`, p, padRadius);
+    }
+
+    for (const pad of extraPads) {
+        if (!pad?.key || !Array.isArray(pad.pos)) continue;
+        ensurePad(pad.key, pad.pos, pad.radius ?? padRadius);
     }
 
     geometry.edges.forEach((edge, ei) => {
@@ -174,7 +183,7 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
             ...edge.waypoints.map((wp, wi) => ({ key: `w${ei}_${wi}`, pos: wp })),
             { key: `c${edge.to}`, pos: to },
         ];
-        for (let i = 1; i < stops.length - 1; i++) ensurePad(stops[i].key, stops[i].pos);
+        for (let i = 1; i < stops.length - 1; i++) ensurePad(stops[i].key, stops[i].pos, padRadius);
         for (let i = 0; i < stops.length - 1; i++) {
             const a = stops[i], b = stops[i + 1];
             const dx = b.pos[0] - a.pos[0];
@@ -182,10 +191,29 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
             const len = Math.hypot(dx, dy);
             if (len < EPS) continue;
             const ang = Math.atan2(dy, dx);
-            ensurePad(a.key, a.pos).dirs.push(ang);
-            ensurePad(b.key, b.pos).dirs.push(ang + Math.PI);
-            caps.push({ a: a.pos.slice(), b: b.pos.slice(), padKeyA: a.key, padKeyB: b.key });
+            ensurePad(a.key, a.pos, padRadius).dirs.push(ang);
+            ensurePad(b.key, b.pos, padRadius).dirs.push(ang + Math.PI);
+            caps.push({ a: a.pos.slice(), b: b.pos.slice(), padKeyA: a.key, padKeyB: b.key, radius: padRadius });
         }
+    });
+
+    extraSegments.forEach((segment, index) => {
+        if (!Array.isArray(segment?.from) || !Array.isArray(segment?.to)) return;
+        const fromKey = segment.fromKey || `extra_from_${index}`;
+        const toKey = segment.toKey || `extra_to_${index}`;
+        const radius = segment.radius ?? padRadius;
+        ensurePad(fromKey, segment.from, radius);
+        ensurePad(toKey, segment.to, radius);
+
+        const dx = segment.to[0] - segment.from[0];
+        const dy = segment.to[1] - segment.from[1];
+        const len = Math.hypot(dx, dy);
+        if (len < EPS) return;
+
+        const ang = Math.atan2(dy, dx);
+        ensurePad(fromKey, segment.from, radius).dirs.push(ang);
+        ensurePad(toKey, segment.to, radius).dirs.push(ang + Math.PI);
+        caps.push({ a: segment.from.slice(), b: segment.to.slice(), padKeyA: fromKey, padKeyB: toKey, radius });
     });
 
     // Pad arcs: parts of each circle not covered by any connected capsule half-disc
@@ -193,8 +221,9 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
     const padList = Array.from(pads.entries()).map(([key, data]) => ({ key, ...data }));
     for (const pad of padList) {
         const [cx, cy] = pad.pos;
+        const localRadius = pad.radius ?? padRadius;
         if (pad.dirs.length === 0) {
-            tokens.push(...circleEntity(cx, cy, padRadius, layer));
+            tokens.push(...circleEntity(cx, cy, localRadius, layer));
             continue;
         }
         const tangents = [];
@@ -217,21 +246,22 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
             // Also require the arc's midpoint to be outside all other shapes so it's
             // genuinely on the outline — an arc that enters a neighbour's capsule is
             // interior and must be dropped.
-            const mx = cx + padRadius * Math.cos(mid);
-            const my = cy + padRadius * Math.sin(mid);
+            const mx = cx + localRadius * Math.cos(mid);
+            const my = cy + localRadius * Math.sin(mid);
             let buried = false;
             for (const cap of caps) {
                 if (cap.padKeyA === pad.key || cap.padKeyB === pad.key) continue;
-                if (segInsideCapsule([mx, my], [mx, my], cap.a, cap.b, padRadius).length) { buried = true; break; }
+                if (segInsideCapsule([mx, my], [mx, my], cap.a, cap.b, cap.radius ?? padRadius).length) { buried = true; break; }
             }
             if (!buried) {
                 for (const other of padList) {
                     if (other.key === pad.key) continue;
                     const dx = mx - other.pos[0], dy = my - other.pos[1];
-                    if (dx * dx + dy * dy < padRadius * padRadius - EPS) { buried = true; break; }
+                    const otherRadius = other.radius ?? padRadius;
+                    if (dx * dx + dy * dy < otherRadius * otherRadius - EPS) { buried = true; break; }
                 }
             }
-            if (!buried) tokens.push(...arcEntity(cx, cy, padRadius, t1, t2, layer));
+            if (!buried) tokens.push(...arcEntity(cx, cy, localRadius, t1, t2, layer));
         }
     }
 
@@ -244,8 +274,9 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
         const dy = cap.b[1] - cap.a[1];
         const len = Math.hypot(dx, dy);
         if (len < EPS) continue;
-        const nx = -dy / len * padRadius;
-        const ny =  dx / len * padRadius;
+        const localRadius = cap.radius ?? padRadius;
+        const nx = -dy / len * localRadius;
+        const ny =  dx / len * localRadius;
         const sides = [
             { p: [cap.a[0] + nx, cap.a[1] + ny], q: [cap.b[0] + nx, cap.b[1] + ny] },
             { p: [cap.a[0] - nx, cap.a[1] - ny], q: [cap.b[0] - nx, cap.b[1] - ny] },
@@ -254,11 +285,11 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
             const insides = [];
             for (let j = 0; j < caps.length; j++) {
                 if (j === ci) continue;
-                insides.push(...segInsideCapsule(side.p, side.q, caps[j].a, caps[j].b, padRadius));
+                insides.push(...segInsideCapsule(side.p, side.q, caps[j].a, caps[j].b, caps[j].radius ?? padRadius));
             }
             for (const pad of padList) {
                 if (pad.key === cap.padKeyA || pad.key === cap.padKeyB) continue;
-                insides.push(...segInsideCircle(side.p, side.q, pad.pos, padRadius));
+                insides.push(...segInsideCircle(side.p, side.q, pad.pos, pad.radius ?? padRadius));
             }
             const outside = subtractIntervals(insides);
             for (const [t0, t1] of outside) {
@@ -270,6 +301,20 @@ export function buildBusbarDXF(geometry, positions, padRadius) {
                 tokens.push(...lineEntity(sx, sy, ex, ey, layer));
             }
         }
+    }
+
+    for (const cutout of cutouts) {
+        const [cx, cy] = cutout.center;
+        const halfWidth = cutout.width / 2;
+        const halfHeight = cutout.height / 2;
+        const x1 = cx - halfWidth;
+        const x2 = cx + halfWidth;
+        const y1 = cy - halfHeight;
+        const y2 = cy + halfHeight;
+        tokens.push(...lineEntity(x1, y1, x2, y1, layer));
+        tokens.push(...lineEntity(x2, y1, x2, y2, layer));
+        tokens.push(...lineEntity(x2, y2, x1, y2, layer));
+        tokens.push(...lineEntity(x1, y2, x1, y1, layer));
     }
 
     tokens.push('0', 'ENDSEC', '0', 'EOF');

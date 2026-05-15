@@ -17,8 +17,27 @@
     </div>
 
     <div class="container">
-        <h1>Cell Holder Generator</h1>
+        <div class="header-row">
+            <div class="header-title">
+                <h1>Cell Holder Generator</h1>
+            </div>
+            <div class="header-right">
+                <a class="gitea-link" href="https://t.me/waak86" target="_blank" rel="noopener noreferrer" title="waak on Telegram">
+                    <svg class="gitea-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.699 8.01c-.123.557-.453.693-.917.43l-2.54-1.873-1.226 1.18c-.136.136-.25.25-.512.25l.182-2.584 4.706-4.25c.205-.182-.044-.283-.317-.1L7.34 14.75l-2.51-.784c-.546-.17-.557-.546.114-.808l9.804-3.78c.455-.164.853.1.182.33z"/></svg>
+                    waak
+                </a>
+                <a class="gitea-link" href="https://github.com/waak86/battery-builder" target="_blank" rel="noopener noreferrer" title="View source on GitHub">
+                    <svg class="gitea-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                    Source
+                </a>
+            </div>
+        </div>
         <p class="subtitle">Generate custom 3D printable cell holders with STEP export</p>
+
+        <div class="warning-banner">
+            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>This project is under construction and has many bugs! Always check your parameters and the DXF and STEP files twice!</span>
+        </div>
 
         <div class="main-layout">
             <div class="config-sidebar">
@@ -151,13 +170,22 @@
                         </div>
                         <div class="row" id="tabDimensionsGroup" style="display:none;">
                             <div class="form-group">
-                                <label>Tab Width (mm)</label>
-                                <input type="number" id="tabWidth" value="4.0" min="0.5" step="0.1">
+                                <label>Tab Length (mm)</label>
+                                <input type="number" id="tabLength" value="10.0" min="1" step="0.5">
                             </div>
                             <div class="form-group">
-                                <label>Tab Depth (mm)</label>
-                                <input type="number" id="tabDepth" value="1.0" min="0.1" step="0.1">
+                                <label>Edge Cut Width (mm)</label>
+                                <input type="number" id="tabWidth" value="4.0" min="1" step="0.5">
                             </div>
+                        </div>
+                        <div class="form-group" id="tabOverlapSideGroup" style="display:none;">
+                            <label>Tab Overlap Side</label>
+                            <select id="tabOverlapSide">
+                                <option value="off" selected>Off</option>
+                                <option value="top">Top</option>
+                                <option value="bottom">Bottom</option>
+                            </select>
+                            <span class="field-hint">Adds one continuous outside lip across the selected edge tabs.</span>
                         </div>
                     </section>
 
@@ -170,17 +198,52 @@
                             </select>
                             <span class="field-hint">STEP exports a 3D solid for CAD or 3D printing. DXF exports a flat 2D outline for laser or plasma cutters.</span>
                         </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="busbarCellCutoutEnabled">
+                            <label for="busbarCellCutoutEnabled">Cell center cutout (5x2 mm) for all busbars</label>
+                        </div>
+                        <div class="busbar-controls-row">
+                            <div class="busbar-face-filter" role="group" aria-label="Face filter">
+                                <button type="button" class="face-filter-btn active" data-filter="both">Top &amp; Bottom</button>
+                                <button type="button" class="face-filter-btn" data-filter="top">Top only</button>
+                            </div>
+                            <div class="busbar-controls-right">
+                                <button type="button" class="btn-ghost btn-dl-all" id="downloadAllBusbarsBtn" title="Download all busbars as a ZIP file">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+                                    ZIP all
+                                </button>
+                                <button type="button" class="btn-ghost btn-clear-markings" id="clearMarkingsBtn" title="Remove all cell assignments without deleting busbars">Clear</button>
+                            </div>
+                        </div>
                         <div id="busbarList"></div>
-                        <button class="btn-secondary" id="addBusbarBtn">+ Add Busbar</button>
+                        <div class="busbar-add-row">
+                            <button class="btn-secondary" id="addTopBusbarBtn">+ Top Busbar</button>
+                            <button class="btn-secondary" id="addBottomBusbarBtn">+ Bottom Busbar</button>
+                        </div>
+                        <div class="panel-divider" aria-hidden="true"></div>
+                        <div class="order-header">Copper Sheet Calculator</div>
+                        <div id="orderContent">
+                            <p class="order-placeholder">Generate a preview first to see sheet requirements.</p>
+                        </div>
                     </section>
                 </div>
 
                 <button class="btn" id="generateBtn">Generate 3D Model</button>
+                <button class="btn-secondary" id="copyShareUrlBtn" type="button">Copy Share URL</button>
             </div>
 
             <div class="preview-container">
                 <h2>Preview</h2>
-                <canvas id="preview"></canvas>
+                <div class="previews-row">
+                    <div class="preview-face-wrap">
+                        <div class="face-label" id="topFaceLabel">Top</div>
+                        <canvas id="preview"></canvas>
+                    </div>
+                    <div class="preview-face-wrap" id="bottomFaceWrap">
+                        <div class="face-label" id="bottomFaceLabel">Bottom</div>
+                        <canvas id="preview-bottom"></canvas>
+                    </div>
+                </div>
                 <div id="previewStats">Configure settings and click Generate to see preview</div>
             </div>
         </div>
